@@ -41,7 +41,7 @@ const UserSchema = new mongoose.Schema({
         type: Date, 
         default: Date.now 
     }
-});
+}, { strict: true }); // ဒါအရေးကြီးတယ်
 
 // Virtual for win rate
 UserSchema.virtual('winRate').get(function() {
