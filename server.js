@@ -36,8 +36,8 @@ app.use(helmet({
 
 // Rate limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
 });
 app.use('/api/', limiter);
 
@@ -47,8 +47,10 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static files
-app.use(express.static(path.join(__dirname, '../frontend')));
+// =============================================
+// FIXED: Static files path - now looking in the correct directory
+// =============================================
+app.use(express.static(path.join(__dirname, 'frontend')));
 
 // Environment check
 console.log('🚀 Starting Crash Game Server...');
@@ -56,6 +58,7 @@ console.log('📊 Environment:', process.env.NODE_ENV || 'development');
 console.log('🤖 Bot Token:', process.env.BOT_TOKEN ? '✅ Set' : '❌ Missing');
 console.log('🗄️ MongoDB URI:', process.env.MONGODB_URI ? '✅ Set' : '❌ Missing');
 console.log('👑 Admin IDs:', process.env.ADMIN_IDS ? '✅ Set' : '❌ Missing');
+console.log('📁 Frontend path:', path.join(__dirname, 'frontend'));
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, {
@@ -71,26 +74,46 @@ mongoose.connect(process.env.MONGODB_URI, {
     process.exit(1);
 });
 
-// Health check
+// =============================================
+// HEALTH CHECK - Use this to verify server is running
+// =============================================
 app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'OK',
         time: new Date().toISOString(),
         uptime: process.uptime(),
-        connections: io.engine.clientsCount
+        connections: io.engine.clientsCount,
+        frontendPath: path.join(__dirname, 'frontend')
     });
 });
 
-// API Routes
+// =============================================
+// API ROUTES
+// =============================================
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/auth', require('./routes/auth'));
 
-// 404 handler
+// =============================================
+// SPA FALLBACK - Serve index.html for any non-API routes (for client-side routing)
+// =============================================
+app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.url.startsWith('/api/') || req.url === '/health') {
+        return next();
+    }
+    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+});
+
+// =============================================
+// 404 HANDLER - For API routes only
+// =============================================
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
 
-// Error handler
+// =============================================
+// ERROR HANDLER
+// =============================================
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
     res.status(500).json({ 
@@ -99,19 +122,38 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Socket.io game logic
+// =============================================
+// SOCKET.IO GAME LOGIC
+// =============================================
 require('./socket')(io);
 
+// =============================================
+// START SERVER
+// =============================================
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📱 Frontend: http://localhost:${PORT}`);
+    console.log(`📱 Frontend URL: https://crash-game-b1ox.onrender.com`);
     console.log(`🕒 Server time: ${new Date().toLocaleString('en-MM', { timeZone: 'Asia/Yangon' })}`);
+    console.log(`📁 Serving static files from: ${path.join(__dirname, 'frontend')}`);
 });
 
-// Graceful shutdown
+// =============================================
+// GRACEFUL SHUTDOWN
+// =============================================
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, closing server...');
+    server.close(() => {
+        console.log('Server closed');
+        mongoose.connection.close(false, () => {
+            console.log('MongoDB connection closed');
+            process.exit(0);
+        });
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received, closing server...');
     server.close(() => {
         console.log('Server closed');
         mongoose.connection.close(false, () => {
