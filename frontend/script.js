@@ -228,6 +228,7 @@ socket.on('reconnect', () => {
     if (initData) socket.emit('authenticate', initData);
 });
 
+// FIX: Immediate UI update after authentication
 socket.on('authenticated', (data) => {
     user = data;
     document.getElementById('balance').innerText = data.balance.toLocaleString();
@@ -235,6 +236,16 @@ socket.on('authenticated', (data) => {
     
     checkAdminStatus();
     showToast(`ကြိုဆိုပါတယ် ${data.username}!`, 'success');
+});
+
+// FIX: Handle force crash from admin
+socket.on('admin_force_crash', (data) => {
+    showToast(`⚠️ ${data.message}`, 'error');
+    // Trigger crash effect
+    document.getElementById('crashEffect').classList.add('active');
+    setTimeout(() => {
+        document.getElementById('crashEffect').classList.remove('active');
+    }, 500);
 });
 
 socket.on('game_state', (state) => {
@@ -354,13 +365,18 @@ function updateHistoryStrip() {
     ).join('');
 }
 
-// Admin functions
+// =============================================
+// FIX 4: Admin functions with better error handling
+// =============================================
 async function checkAdminStatus() {
     if (!user) return;
     
     try {
         const response = await fetch('/api/admin/stats', {
-            headers: { 'x-telegram-init-data': initData }
+            headers: { 
+                'x-telegram-init-data': initData,
+                'Content-Type': 'application/json'
+            }
         });
         
         if (response.ok) {
@@ -369,9 +385,12 @@ async function checkAdminStatus() {
             fetchAdminStats();
             fetchUsers();
             startAdminAutoRefresh();
+            console.log('✅ Admin access granted');
+        } else {
+            console.log('❌ Not an admin:', response.status);
         }
     } catch (err) {
-        console.log('Not an admin');
+        console.log('Admin check failed:', err);
     }
 }
 
@@ -387,7 +406,10 @@ function startAdminAutoRefresh() {
 async function fetchAdminStats() {
     try {
         const response = await fetch('/api/admin/stats', {
-            headers: { 'x-telegram-init-data': initData }
+            headers: { 
+                'x-telegram-init-data': initData,
+                'Content-Type': 'application/json'
+            }
         });
         
         if (response.ok) {
@@ -404,7 +426,10 @@ async function fetchAdminStats() {
 async function fetchUsers() {
     try {
         const response = await fetch('/api/admin/users', {
-            headers: { 'x-telegram-init-data': initData }
+            headers: { 
+                'x-telegram-init-data': initData,
+                'Content-Type': 'application/json'
+            }
         });
         
         if (response.ok) {
@@ -418,6 +443,8 @@ async function fetchUsers() {
 
 function displayUsers(users) {
     const usersList = document.getElementById('usersList');
+    if (!usersList) return;
+    
     usersList.innerHTML = users.map(user => `
         <div class="user-item">
             <div class="user-info">
@@ -430,6 +457,29 @@ function displayUsers(users) {
             </div>
         </div>
     `).join('');
+}
+
+// =============================================
+// FIX 5: Force Crash function for admin
+// =============================================
+async function forceCrash() {
+    try {
+        const response = await fetch('/api/admin/force-crash', {
+            method: 'POST',
+            headers: { 
+                'x-telegram-init-data': initData,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            showToast('✅ ဂိမ်းကိုရပ်လိုက်ပါပြီ', 'success');
+        } else {
+            showToast('❌ ဂိမ်းရပ်ရန်မအောင်မြင်ပါ', 'error');
+        }
+    } catch (err) {
+        showToast('❌ Force crash failed', 'error');
+    }
 }
 
 // Global functions for buttons
@@ -452,10 +502,15 @@ window.refreshAdmin = function() {
     showToast('ဒေတာများကိုပြန်လည်စစ်ဆေးနေပါသည်', 'info');
 };
 
+window.forceCrash = forceCrash;
+
 window.exportData = async function() {
     try {
         const response = await fetch('/api/admin/users', {
-            headers: { 'x-telegram-init-data': initData }
+            headers: { 
+                'x-telegram-init-data': initData,
+                'Content-Type': 'application/json'
+            }
         });
         
         if (response.ok) {
@@ -483,9 +538,11 @@ window.editUser = function(userId) {
                 'x-telegram-init-data': initData
             },
             body: JSON.stringify({ balance: parseFloat(newBalance) })
-        }).then(() => {
-            fetchUsers();
-            showToast('ငွေပမာဏပြောင်းလဲပြီးပါပြီ', 'success');
+        }).then(response => {
+            if (response.ok) {
+                fetchUsers();
+                showToast('ငွေပမာဏပြောင်းလဲပြီးပါပြီ', 'success');
+            }
         });
     }
 };
@@ -493,10 +550,15 @@ window.editUser = function(userId) {
 window.toggleBanUser = function(userId) {
     fetch('/api/admin/user/' + userId + '/toggle-ban', {
         method: 'POST',
-        headers: { 'x-telegram-init-data': initData }
-    }).then(() => {
-        fetchUsers();
-        showToast('အသုံးပြုခွင့်ပြောင်းလဲပြီးပါပြီ', 'success');
+        headers: { 
+            'x-telegram-init-data': initData,
+            'Content-Type': 'application/json'
+        }
+    }).then(response => {
+        if (response.ok) {
+            fetchUsers();
+            showToast('အသုံးပြုခွင့်ပြောင်းလဲပြီးပါပြီ', 'success');
+        }
     });
 };
 
