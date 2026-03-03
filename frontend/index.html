@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crash Game - Aviator Clone</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="game-area">
+            <canvas id="gameCanvas"></canvas>
+            <div class="multiplier-display" id="multiplier">1.00x</div>
+        </div>
+        <div class="info-panel">
+            <div class="balance">လက်ကျန်ငွေ: <span id="balance">0</span> MMK</div>
+            <div class="username" id="username"></div>
+        </div>
+        <div class="betting-panel">
+            <input type="number" id="betAmount" placeholder="လောင်းကြေးထည့်ရန်" min="1" value="10">
+            <button id="placeBetBtn" class="btn bet">လောင်းမည်</button>
+            <button id="cashoutBtn" class="btn cashout" disabled>ငွေထုတ်ရန်</button>
+        </div>
+        <div class="admin-panel" id="adminPanel" style="display: none;">
+            <h3>အက်မင် အချက်အလက်</h3>
+            <div>စုစုပေါင်းလောင်းငွေ: <span id="totalBets">0</span> MMK</div>
+            <div>စုစုပေါင်းအနိုင်ငွေ: <span id="totalWon">0</span> MMK</div>
+            <div>အသားတင်အမြတ်: <span id="profit">0</span> MMK</div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
