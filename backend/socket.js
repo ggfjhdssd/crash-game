@@ -1,184 +1,320 @@
 const User = require('./models/User');
 const Bet = require('./models/Bet');
+const GameRound = require('./models/GameRound');
 const { v4: uuidv4 } = require('uuid');
 
-// Game state
+let io;
 let currentMultiplier = 1.00;
 let gameActive = false;
 let crashPoint = 1.00;
 let roundId = uuidv4();
 let intervalId = null;
-let bets = []; // active bets in current round
-let io; // Global io variable
+let countdownInterval = null;
+let bets = [];
+let roundStartTime = null;
 
 // Generate crash point with 3% house edge
 function generateCrashPoint() {
-  const r = Math.random();
-  const crash = 0.97 / (1 - r);
-  return Math.max(1.00, Math.floor(crash * 100) / 100);
+    const r = Math.random();
+    const crash = 0.97 / (1 - r);
+    return Math.max(1.00, Math.floor(crash * 100) / 100);
 }
 
 // Reset game for new round
-function resetGame() {
-  currentMultiplier = 1.00;
-  gameActive = true;
-  crashPoint = generateCrashPoint();
-  roundId = uuidv4();
-  bets = []; // clear active bets
-  if (io) {
-    io.emit('game_started', { roundId }); // crashPoint ကို client ကိုမပို့ပါနဲ့ (secret ထားရန်)
-  }
+async function resetGame() {
+    currentMultiplier = 1.00;
+    gameActive = true;
+    crashPoint = generateCrashPoint();
+    roundId = uuidv4();
+    roundStartTime = Date.now();
+    bets = [];
+    
+    // Save round to database
+    await GameRound.create({
+        roundId,
+        crashPoint,
+        startTime: new Date()
+    });
+    
+    io.emit('game_started', { roundId });
+    console.log(`🎮 New round started: ${roundId}, crash point: ${crashPoint}x`);
 }
 
 // End round (crash)
 async function endRound() {
-  gameActive = false;
-  clearInterval(intervalId);
-
-  // Process all active bets as lost
-  for (const bet of bets) {
-    bet.status = 'lost';
-    await bet.save();
-  }
-
-  if (io) {
+    gameActive = false;
+    clearInterval(intervalId);
+    
+    // Process all active bets as lost
+    for (const bet of bets) {
+        bet.status = 'lost';
+        await bet.save();
+    }
+    
+    // Update round in database
+    await GameRound.findOneAndUpdate(
+        { roundId },
+        { 
+            endTime: new Date(),
+            totalBets: bets.length,
+            totalAmount: bets.reduce((sum, b) => sum + b.amount, 0),
+            crashPoint
+        }
+    );
+    
     io.emit('game_crashed', { crashPoint, roundId });
-  }
+    console.log(`💥 Round crashed at ${crashPoint}x`);
+    
+    // Start countdown for next round
+    startCountdown();
+}
 
-  // Schedule next round after 5 seconds
-  setTimeout(() => {
-    resetGame();
-    startMultiplierIncrease();
-  }, 5000);
+// Start countdown between rounds
+function startCountdown() {
+    let countdown = 5;
+    countdownInterval = setInterval(() => {
+        countdown--;
+        io.emit('countdown', { seconds: countdown });
+        
+        if (countdown <= 0) {
+            clearInterval(countdownInterval);
+            resetGame();
+            startMultiplierIncrease();
+        }
+    }, 1000);
 }
 
 // Increase multiplier every 100ms
 function startMultiplierIncrease() {
-  intervalId = setInterval(() => {
-    if (!gameActive) return;
-    currentMultiplier = parseFloat((currentMultiplier + 0.01).toFixed(2));
-    
-    if (io) {
-      io.emit('multiplier_update', { multiplier: currentMultiplier, roundId });
-    }
-
-    // Check if crash point reached
-    if (currentMultiplier >= crashPoint) {
-      endRound();
-    }
-  }, 100);
-}
-
-// Helper to parse Telegram initData (simplified)
-function parseInitData(initData) {
-  const params = new URLSearchParams(initData);
-  const userStr = params.get('user');
-  if (!userStr) throw new Error('No user data');
-  return JSON.parse(decodeURIComponent(userStr));
-}
-
-// Main socket function
-module.exports = (socketIO) => {
-  io = socketIO; // Assign to global io variable
-  
-  io.on('connection', (socket) => {
-    console.log('New client connected:', socket.id);
-
-    // Send current game state
-    socket.emit('game_state', {
-      gameActive,
-      currentMultiplier,
-      roundId
-    });
-
-    // User authentication via Telegram initData
-    socket.on('authenticate', async (initData) => {
-      try {
-        const userData = parseInitData(initData);
-        const { id, username, first_name } = userData;
-
-        let user = await User.findOne({ userId: id.toString() });
-        if (!user) {
-          user = new User({
-            userId: id.toString(),
-            username: username || first_name,
-            firstName: first_name,
-            coins: 1000 // Welcome bonus
-          });
-          await user.save();
+    intervalId = setInterval(() => {
+        if (!gameActive) return;
+        
+        currentMultiplier = parseFloat((currentMultiplier + 0.01).toFixed(2));
+        
+        // Send multiplier update to all clients
+        io.emit('multiplier_update', { 
+            multiplier: currentMultiplier, 
+            roundId,
+            timestamp: Date.now()
+        });
+        
+        // Check if crash point reached
+        if (currentMultiplier >= crashPoint) {
+            endRound();
         }
+    }, 100);
+}
 
-        socket.user = user;
-        socket.emit('authenticated', { balance: user.coins, username: user.username });
-      } catch (err) {
-        socket.emit('auth_error', 'Invalid initData');
-      }
+// Get active bets count and total
+function getRoundStats() {
+    return {
+        totalBets: bets.reduce((sum, b) => sum + b.amount, 0),
+        playersCount: bets.length
+    };
+}
+
+module.exports = (socketIO) => {
+    io = socketIO;
+    
+    io.on('connection', async (socket) => {
+        console.log(`🔌 New client connected: ${socket.id}`);
+        
+        // Send current game state
+        socket.emit('game_state', {
+            gameActive,
+            currentMultiplier,
+            roundId,
+            roundStartTime
+        });
+        
+        socket.emit('round_stats', getRoundStats());
+        
+        // Authentication
+        socket.on('authenticate', async (initData) => {
+            try {
+                const { validateTelegramData, parseInitData } = require('./utils/telegram');
+                
+                // Validate Telegram data
+                const isValid = validateTelegramData(initData, process.env.BOT_TOKEN);
+                if (!isValid) {
+                    socket.emit('auth_error', 'Invalid Telegram data');
+                    return;
+                }
+                
+                const userData = parseInitData(initData);
+                const { id, username, first_name } = userData;
+                
+                let user = await User.findOne({ userId: id.toString() });
+                
+                if (!user) {
+                    user = new User({
+                        userId: id.toString(),
+                        username: username || first_name,
+                        firstName: first_name,
+                        coins: 1000,
+                        totalGames: 0,
+                        totalWins: 0
+                    });
+                    await user.save();
+                    console.log(`👤 New user created: ${username || first_name}`);
+                }
+                
+                socket.user = user;
+                socket.emit('authenticated', { 
+                    balance: user.coins, 
+                    username: user.username,
+                    userId: user.userId
+                });
+                
+            } catch (err) {
+                console.error('Authentication error:', err);
+                socket.emit('auth_error', 'Authentication failed');
+            }
+        });
+        
+        // Place bet
+        socket.on('place_bet', async (data) => {
+            try {
+                if (!socket.user) {
+                    socket.emit('error', 'ကျေးဇူးပြု၍အကောင့်ဝင်ပါ');
+                    return;
+                }
+                
+                if (!gameActive) {
+                    socket.emit('error', 'ဂိမ်းစတင်ရန်စောင့်ဆိုင်းနေပါသည်');
+                    return;
+                }
+                
+                if (bets.some(b => b.userId === socket.user.userId)) {
+                    socket.emit('error', 'ဤအကျော့တွင်လောင်းပြီးပါပြီ');
+                    return;
+                }
+                
+                const amount = parseFloat(data.amount);
+                if (isNaN(amount) || amount < 10) {
+                    socket.emit('error', 'အနည်းဆုံး ၁၀ MMK လောင်းရပါမည်');
+                    return;
+                }
+                
+                if (socket.user.coins < amount) {
+                    socket.emit('error', 'လက်ကျန်ငွေမလုံလောက်ပါ');
+                    return;
+                }
+                
+                // Check if user is banned
+                if (socket.user.banned) {
+                    socket.emit('error', 'သင့်အကောင့်ကိုပိတ်ထားပါသည်');
+                    return;
+                }
+                
+                // Deduct balance
+                socket.user.coins -= amount;
+                socket.user.totalBets += 1;
+                await socket.user.save();
+                
+                const bet = new Bet({
+                    userId: socket.user.userId,
+                    username: socket.user.username,
+                    amount,
+                    roundId,
+                    status: 'active'
+                });
+                await bet.save();
+                
+                bets.push(bet);
+                
+                socket.emit('bet_placed', { 
+                    balance: socket.user.coins, 
+                    betId: bet._id 
+                });
+                
+                io.emit('round_stats', getRoundStats());
+                
+                console.log(`💰 Bet placed: ${socket.user.username} - ${amount} MMK`);
+                
+            } catch (err) {
+                console.error('Bet placement error:', err);
+                socket.emit('error', 'လောင်းကြေးထည့်ရာတွင်အဆင်မပြေပါ');
+            }
+        });
+        
+        // Cash out
+        socket.on('cash_out', async () => {
+            try {
+                if (!socket.user) {
+                    socket.emit('error', 'ကျေးဇူးပြု၍အကောင့်ဝင်ပါ');
+                    return;
+                }
+                
+                if (!gameActive) {
+                    socket.emit('error', 'ဂိမ်းပြီးဆုံးသွားပါပြီ');
+                    return;
+                }
+                
+                const bet = bets.find(b => 
+                    b.userId === socket.user.userId && b.status === 'active'
+                );
+                
+                if (!bet) {
+                    socket.emit('error', 'လောင်းကြေးမရှိပါ');
+                    return;
+                }
+                
+                const cashoutMultiplier = currentMultiplier;
+                const winAmount = bet.amount * cashoutMultiplier;
+                const profit = winAmount - bet.amount;
+                
+                // Update user balance
+                socket.user.coins += winAmount;
+                socket.user.totalWins += 1;
+                await socket.user.save();
+                
+                // Update bet record
+                bet.status = 'cashed_out';
+                bet.cashoutMultiplier = cashoutMultiplier;
+                bet.profit = profit;
+                await bet.save();
+                
+                socket.emit('cashed_out', {
+                    multiplier: cashoutMultiplier,
+                    winAmount,
+                    balance: socket.user.coins
+                });
+                
+                io.emit('round_stats', getRoundStats());
+                io.emit('user_cashed_out', { 
+                    username: socket.user.username, 
+                    multiplier: cashoutMultiplier 
+                });
+                
+                console.log(`💵 Cash out: ${socket.user.username} - ${winAmount} MMK at ${cashoutMultiplier}x`);
+                
+            } catch (err) {
+                console.error('Cash out error:', err);
+                socket.emit('error', 'ငွေထုတ်ရာတွင်အဆင်မပြေပါ');
+            }
+        });
+        
+        // Reconnection handling
+        socket.on('reconnect', () => {
+            console.log(`🔄 Client reconnected: ${socket.id}`);
+            if (socket.user) {
+                socket.emit('game_state', {
+                    gameActive,
+                    currentMultiplier,
+                    roundId
+                });
+            }
+        });
+        
+        socket.on('disconnect', () => {
+            console.log(`🔌 Client disconnected: ${socket.id}`);
+        });
     });
-
-    // Place bet
-    socket.on('place_bet', async (data) => {
-      if (!socket.user) return socket.emit('error', 'Not authenticated');
-      if (!gameActive) return socket.emit('error', 'Game not active');
-      if (bets.some(b => b.userId === socket.user.userId)) return socket.emit('error', 'Already bet in this round');
-
-      const amount = parseFloat(data.amount);
-      if (isNaN(amount) || amount <= 0) return socket.emit('error', 'Invalid amount');
-      if (socket.user.coins < amount) return socket.emit('error', 'Insufficient balance');
-
-      // Deduct balance
-      socket.user.coins -= amount;
-      await socket.user.save();
-
-      const bet = new Bet({
-        userId: socket.user.userId,
-        username: socket.user.username,
-        amount,
-        roundId,
-        status: 'active'
-      });
-      await bet.save();
-      bets.push(bet);
-
-      socket.emit('bet_placed', { balance: socket.user.coins, betId: bet._id });
-      io.emit('new_bet', { username: socket.user.username, amount });
-    });
-
-    // Cash out
-    socket.on('cash_out', async () => {
-      if (!socket.user) return socket.emit('error', 'Not authenticated');
-      if (!gameActive) return socket.emit('error', 'Game already crashed');
-
-      const bet = bets.find(b => b.userId === socket.user.userId && b.status === 'active');
-      if (!bet) return socket.emit('error', 'No active bet found');
-
-      const cashoutMultiplier = currentMultiplier;
-      const winAmount = bet.amount * cashoutMultiplier;
-      const profit = winAmount - bet.amount;
-
-      // Update user balance
-      socket.user.coins += winAmount;
-      await socket.user.save();
-
-      // Update bet record
-      bet.status = 'cashed_out';
-      bet.cashoutMultiplier = cashoutMultiplier;
-      bet.profit = profit;
-      await bet.save();
-
-      socket.emit('cashed_out', {
-        multiplier: cashoutMultiplier,
-        winAmount,
-        balance: socket.user.coins
-      });
-      io.emit('user_cashed_out', { username: socket.user.username, multiplier: cashoutMultiplier });
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
-    });
-  });
-
-  // Start first round
-  resetGame();
-  startMultiplierIncrease();
+    
+    // Start first round
+    setTimeout(() => {
+        resetGame();
+        startMultiplierIncrease();
+    }, 1000);
 };
