@@ -8,6 +8,37 @@ const { adminAuth } = require('../middleware/auth');
 // All admin routes require authentication
 router.use(adminAuth);
 
+// =============================================
+// FIX 3: Force Crash endpoint for admin
+// =============================================
+router.post('/force-crash', async (req, res) => {
+    try {
+        const io = req.app.locals.io;
+        if (!io) {
+            return res.status(500).json({ error: 'Socket.io not available' });
+        }
+        
+        // Emit force crash event to all clients
+        io.emit('admin_force_crash', {
+            message: 'Admin မှဂိမ်းကိုရပ်လိုက်ပါသည်',
+            timestamp: new Date()
+        });
+        
+        // The actual crash will be handled by socket.js
+        // This just triggers the frontend to show crash
+        
+        res.json({ 
+            success: true, 
+            message: 'Force crash triggered',
+            time: new Date()
+        });
+        
+    } catch (err) {
+        console.error('Force crash error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Get dashboard stats
 router.get('/stats', async (req, res) => {
     try {
@@ -35,6 +66,16 @@ router.get('/stats', async (req, res) => {
             { $group: { _id: null, total: { $sum: '$profit' } } }
         ]);
         
+        // Live bets (current round)
+        const liveBetsAgg = await Bet.aggregate([
+            { $match: { status: 'active' } },
+            { $group: { 
+                _id: null, 
+                total: { $sum: '$amount' },
+                count: { $sum: 1 }
+            } }
+        ]);
+        
         // User stats
         const totalUsers = await User.countDocuments();
         const activeUsers = await User.countDocuments({ 
@@ -45,6 +86,8 @@ router.get('/stats', async (req, res) => {
         const totalWon = totalWonAgg[0]?.total || 0;
         const todayBets = todayBetsAgg[0]?.total || 0;
         const todayWon = todayWonAgg[0]?.total || 0;
+        const liveBets = liveBetsAgg[0]?.total || 0;
+        const livePlayers = liveBetsAgg[0]?.count || 0;
         
         // House profit = Total Bets - Total Winnings
         const profit = totalBets - totalWon;
@@ -65,6 +108,8 @@ router.get('/stats', async (req, res) => {
             todayProfit,
             totalUsers,
             activeUsers,
+            liveBets,
+            livePlayers,
             recentGames,
             lastUpdated: new Date()
         });
