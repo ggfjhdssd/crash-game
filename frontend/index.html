@@ -2,34 +2,151 @@
 <html lang="my">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crash Game - Aviator Clone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CRASH GAME • AVIATOR</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <div class="game-area">
-            <canvas id="gameCanvas"></canvas>
-            <div class="multiplier-display" id="multiplier">1.00x</div>
+    <div class="cyber-wrapper">
+        <!-- Header Section -->
+        <div class="header glass-panel">
+            <div class="logo">
+                <span class="logo-text">CRASH</span>
+                <span class="logo-accent">.GAME</span>
+            </div>
+            <div class="user-info">
+                <div class="balance-container">
+                    <span class="balance-label">လက်ကျန်</span>
+                    <span class="balance-value" id="balance">0</span>
+                    <span class="balance-currency">MMK</span>
+                </div>
+                <div class="avatar" id="username">Guest</div>
+            </div>
         </div>
-        <div class="info-panel">
-            <div class="balance">လက်ကျန်ငွေ: <span id="balance">0</span> MMK</div>
-            <div class="username" id="username"></div>
+
+        <!-- Game Area -->
+        <div class="game-container">
+            <div class="game-canvas-wrapper">
+                <canvas id="gameCanvas"></canvas>
+                
+                <!-- Waiting Overlay -->
+                <div class="waiting-overlay" id="waitingOverlay">
+                    <div class="waiting-content">
+                        <div class="waiting-spinner"></div>
+                        <div class="waiting-text">နောက်အကျော့စတင်ရန် စက္ကန့်ပိုင်းအကြာ</div>
+                        <div class="countdown-bar">
+                            <div class="countdown-progress" id="countdownProgress"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Crash Effect -->
+                <div class="crash-effect" id="crashEffect"></div>
+
+                <!-- Multiplier Display -->
+                <div class="multiplier-container">
+                    <span class="multiplier-value" id="multiplier">1.00x</span>
+                    <span class="multiplier-label">လက်ရှိမြှောက်ဖော်ကိန်း</span>
+                </div>
+
+                <!-- History Strip -->
+                <div class="history-strip" id="historyStrip"></div>
+            </div>
         </div>
-        <div class="betting-panel">
-            <input type="number" id="betAmount" placeholder="လောင်းကြေးထည့်ရန်" min="1" value="10">
-            <button id="placeBetBtn" class="btn bet">လောင်းမည်</button>
-            <button id="cashoutBtn" class="btn cashout" disabled>ငွေထုတ်ရန်</button>
+
+        <!-- Betting Panel -->
+        <div class="betting-panel glass-panel">
+            <div class="betting-header">
+                <span class="panel-title">လောင်းကြေးထည့်ရန်</span>
+                <div class="quick-amounts">
+                    <button class="quick-btn" data-amount="10">10</button>
+                    <button class="quick-btn" data-amount="50">50</button>
+                    <button class="quick-btn" data-amount="100">100</button>
+                    <button class="quick-btn" data-amount="500">500</button>
+                </div>
+            </div>
+            
+            <div class="betting-input-group">
+                <input type="number" id="betAmount" class="bet-input" placeholder="ငွေပမာဏ" min="1" value="10">
+                <div class="bet-buttons">
+                    <button id="placeBetBtn" class="btn btn-bet">
+                        <span class="btn-text">လောင်းမည်</span>
+                        <span class="btn-icon">🎰</span>
+                    </button>
+                    <button id="cashoutBtn" class="btn btn-cashout" disabled>
+                        <span class="btn-text">ငွေထုတ်ရန်</span>
+                        <span class="btn-icon">💸</span>
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="admin-panel" id="adminPanel" style="display: none;">
-            <h3>အက်မင် အချက်အလက်</h3>
-            <div>စုစုပေါင်းလောင်းငွေ: <span id="totalBets">0</span> MMK</div>
-            <div>စုစုပေါင်းအနိုင်ငွေ: <span id="totalWon">0</span> MMK</div>
-            <div>အသားတင်အမြတ်: <span id="profit">0</span> MMK</div>
+
+        <!-- Stats Panel -->
+        <div class="stats-panel glass-panel">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-label">ဒီအကျော့လောင်းငွေ</span>
+                    <span class="stat-value" id="roundBets">0 MMK</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">ကစားသမား</span>
+                    <span class="stat-value" id="playersCount">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">နောက်ဆုံးပေါက်ကွဲမှု</span>
+                    <span class="stat-value" id="lastCrash">1.00x</span>
+                </div>
+            </div>
         </div>
+
+        <!-- Admin Panel (Hidden by default) -->
+        <div class="admin-panel glass-panel" id="adminPanel" style="display: none;">
+            <div class="admin-header">
+                <h3>👑 ADMIN DASHBOARD</h3>
+                <span class="admin-badge">CYBER CONTROL</span>
+            </div>
+            
+            <div class="admin-stats-grid">
+                <div class="admin-stat-card">
+                    <span class="admin-stat-label">စုစုပေါင်းလောင်းငွေ</span>
+                    <span class="admin-stat-value" id="totalBets">0</span>
+                    <span class="admin-stat-currency">MMK</span>
+                </div>
+                <div class="admin-stat-card">
+                    <span class="admin-stat-label">စုစုပေါင်းအနိုင်ငွေ</span>
+                    <span class="admin-stat-value" id="totalWon">0</span>
+                    <span class="admin-stat-currency">MMK</span>
+                </div>
+                <div class="admin-stat-card profit">
+                    <span class="admin-stat-label">အသားတင်အမြတ်</span>
+                    <span class="admin-stat-value" id="profit">0</span>
+                    <span class="admin-stat-currency">MMK</span>
+                </div>
+            </div>
+
+            <div class="admin-section">
+                <div class="admin-section-header">
+                    <span>👥 ကစားသမားများ</span>
+                    <button class="admin-refresh-btn" onclick="refreshUsers()">🔄</button>
+                </div>
+                <div class="users-list" id="usersList">
+                    <!-- Users will be loaded here -->
+                </div>
+            </div>
+
+            <div class="admin-actions">
+                <button class="admin-action-btn" onclick="exportData()">📥 ဒေတာထုတ်ရန်</button>
+                <button class="admin-action-btn" onclick="refreshAdmin()">🔄 ပြန်စစ်ရန်</button>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
