@@ -13,18 +13,40 @@ let countdownInterval = null;
 let bets = [];
 let roundStartTime = null;
 
-// Generate crash point with 3% house edge
-function generateCrashPoint() {
+// =============================================
+// FIX 1: Smart Crash Logic for Admin Profitability
+// =============================================
+function generateSmartCrashPoint() {
+    // Base random crash point with 3% house edge
     const r = Math.random();
-    const crash = 0.97 / (1 - r);
-    return Math.max(1.00, Math.floor(crash * 100) / 100);
+    const baseCrash = 0.97 / (1 - r);
+    
+    // Calculate total active bets
+    const totalBetsAmount = bets.reduce((sum, bet) => sum + bet.amount, 0);
+    
+    // Smart Logic: If total bets > threshold, force early crash
+    const THRESHOLD = 10000; // 10,000 MMK threshold
+    const EARLY_CRASH_MAX = 1.50; // Max 1.50x if threshold exceeded
+    
+    let finalCrash = Math.max(1.00, Math.floor(baseCrash * 100) / 100);
+    
+    // If total bets exceed threshold, limit crash point
+    if (totalBetsAmount > THRESHOLD) {
+        finalCrash = Math.min(finalCrash, EARLY_CRASH_MAX);
+        console.log(`🛡️ House protection: Total bets ${totalBetsAmount} > threshold, limiting crash to ${finalCrash}x`);
+    }
+    
+    // House Edge: Ensure 95% payout ratio over time
+    // This is handled by the base formula 0.97/(1-r) which already has 3% edge
+    
+    return finalCrash;
 }
 
 // Reset game for new round
 async function resetGame() {
     currentMultiplier = 1.00;
     gameActive = true;
-    crashPoint = generateCrashPoint();
+    crashPoint = generateSmartCrashPoint(); // Use smart crash logic
     roundId = uuidv4();
     roundStartTime = Date.now();
     bets = [];
@@ -129,7 +151,9 @@ module.exports = (socketIO) => {
         
         socket.emit('round_stats', getRoundStats());
         
-        // Authentication
+        // =============================================
+        // FIX 2: Authentication with proper username fallback
+        // =============================================
         socket.on('authenticate', async (initData) => {
             try {
                 const { validateTelegramData, parseInitData } = require('./utils/telegram');
@@ -144,19 +168,27 @@ module.exports = (socketIO) => {
                 const userData = parseInitData(initData);
                 const { id, username, first_name } = userData;
                 
+                // FIX: Proper username fallback
+                const displayName = username || first_name || id.toString().slice(0, 8);
+                
                 let user = await User.findOne({ userId: id.toString() });
                 
                 if (!user) {
+                    // FIX: New user gets 1000 MMK bonus
                     user = new User({
                         userId: id.toString(),
-                        username: username || first_name,
-                        firstName: first_name,
-                        coins: 1000,
+                        username: displayName,
+                        firstName: first_name || '',
+                        coins: 1000, // Welcome bonus
                         totalGames: 0,
                         totalWins: 0
                     });
                     await user.save();
-                    console.log(`👤 New user created: ${username || first_name}`);
+                    console.log(`👤 New user created: ${displayName} with 1000 MMK bonus`);
+                } else {
+                    // Update last seen
+                    user.lastSeen = new Date();
+                    await user.save();
                 }
                 
                 socket.user = user;
@@ -210,6 +242,7 @@ module.exports = (socketIO) => {
                 // Deduct balance
                 socket.user.coins -= amount;
                 socket.user.totalBets += 1;
+                socket.user.totalWagered += amount;
                 await socket.user.save();
                 
                 const bet = new Bet({
@@ -303,6 +336,11 @@ module.exports = (socketIO) => {
                     gameActive,
                     currentMultiplier,
                     roundId
+                });
+                socket.emit('authenticated', {
+                    balance: socket.user.coins,
+                    username: socket.user.username,
+                    userId: socket.user.userId
                 });
             }
         });
