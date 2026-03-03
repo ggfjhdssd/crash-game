@@ -19,8 +19,10 @@ async function adminAuth(req, res, next) {
         const userData = parseInitData(initData);
         const userId = userData.id.toString();
         
-        // Check if user is admin
-        const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',') : [];
+        // FIX: Check if user is admin - convert both to string for comparison
+        const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',').map(id => id.trim()) : [];
+        
+        console.log('Admin check:', { userId, adminIds }); // Debug log
         
         if (!adminIds.includes(userId)) {
             return res.status(403).json({ error: 'Access denied' });
