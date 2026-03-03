@@ -36,7 +36,6 @@ body {
     width: 100%;
     height: 100%;
     background: radial-gradient(ellipse at top, #1a2f4f, #0a1428);
-    /* Stars background will be drawn by canvas */
 }
 
 .multiplier-display {
@@ -110,10 +109,108 @@ body {
     cursor: not-allowed;
 }
 
+/* Admin Panel Styles */
 .admin-panel {
-    background: rgba(0,0,0,0.6);
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    padding: 20px;
+    border-radius: 15px;
+    border: 1px solid #4a4a8a;
+    color: #fff;
+    margin-top: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+    from { box-shadow: 0 0 10px -10px #4a4a8a; }
+    to { box-shadow: 0 0 20px 0px #6a6aaa; }
+}
+
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #4a4a8a;
+    padding-bottom: 10px;
+}
+
+.admin-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 1.2rem;
+}
+
+.admin-time {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: rgba(255,255,255,0.1);
     padding: 15px;
     border-radius: 10px;
-    border: 1px solid gold;
-    color: gold;
+    text-align: center;
+}
+
+.stat-card.profit {
+    background: rgba(76, 175, 80, 0.2);
+    border: 1px solid #4CAF50;
+}
+
+.stat-card.today {
+    background: rgba(255, 152, 0, 0.2);
+    border: 1px solid #FF9800;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: #aaa;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #ffd700;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.admin-btn {
+    background: #4a4a8a;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+}
+
+.admin-btn:hover {
+    background: #6a6aaa;
+    transform: translateY(-2px);
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+    .admin-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .betting-panel {
+        flex-direction: column;
+    }
 }
