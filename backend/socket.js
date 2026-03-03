@@ -9,6 +9,7 @@ let crashPoint = 1.00;
 let roundId = uuidv4();
 let intervalId = null;
 let bets = []; // active bets in current round
+let io; // Global io variable
 
 // Generate crash point with 3% house edge
 function generateCrashPoint() {
@@ -24,7 +25,9 @@ function resetGame() {
   crashPoint = generateCrashPoint();
   roundId = uuidv4();
   bets = []; // clear active bets
-  io.emit('game_started', { roundId, crashPoint }); // optional, crashPoint hidden normally
+  if (io) {
+    io.emit('game_started', { roundId }); // crashPoint ကို client ကိုမပို့ပါနဲ့ (secret ထားရန်)
+  }
 }
 
 // End round (crash)
@@ -36,11 +39,11 @@ async function endRound() {
   for (const bet of bets) {
     bet.status = 'lost';
     await bet.save();
-    // User's balance already deducted when placing bet, so no change
   }
 
-  // Save game history if needed
-  io.emit('game_crashed', { crashPoint, roundId });
+  if (io) {
+    io.emit('game_crashed', { crashPoint, roundId });
+  }
 
   // Schedule next round after 5 seconds
   setTimeout(() => {
@@ -54,7 +57,10 @@ function startMultiplierIncrease() {
   intervalId = setInterval(() => {
     if (!gameActive) return;
     currentMultiplier = parseFloat((currentMultiplier + 0.01).toFixed(2));
-    io.emit('multiplier_update', { multiplier: currentMultiplier, roundId });
+    
+    if (io) {
+      io.emit('multiplier_update', { multiplier: currentMultiplier, roundId });
+    }
 
     // Check if crash point reached
     if (currentMultiplier >= crashPoint) {
@@ -63,7 +69,18 @@ function startMultiplierIncrease() {
   }, 100);
 }
 
-module.exports = (io) => {
+// Helper to parse Telegram initData (simplified)
+function parseInitData(initData) {
+  const params = new URLSearchParams(initData);
+  const userStr = params.get('user');
+  if (!userStr) throw new Error('No user data');
+  return JSON.parse(decodeURIComponent(userStr));
+}
+
+// Main socket function
+module.exports = (socketIO) => {
+  io = socketIO; // Assign to global io variable
+  
   io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
 
@@ -77,9 +94,7 @@ module.exports = (io) => {
     // User authentication via Telegram initData
     socket.on('authenticate', async (initData) => {
       try {
-        // Validate Telegram initData (simple example, use official validation)
-        // For production, you must verify hash with bot token
-        const userData = parseInitData(initData); // implement parse function
+        const userData = parseInitData(initData);
         const { id, username, first_name } = userData;
 
         let user = await User.findOne({ userId: id.toString() });
@@ -125,7 +140,7 @@ module.exports = (io) => {
       bets.push(bet);
 
       socket.emit('bet_placed', { balance: socket.user.coins, betId: bet._id });
-      io.emit('new_bet', { username: socket.user.username, amount }); // optional
+      io.emit('new_bet', { username: socket.user.username, amount });
     });
 
     // Cash out
@@ -167,13 +182,3 @@ module.exports = (io) => {
   resetGame();
   startMultiplierIncrease();
 };
-
-// Helper to parse Telegram initData (simplified)
-function parseInitData(initData) {
-  // In production, validate with bot token using crypto
-  // Example: https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
-  const params = new URLSearchParams(initData);
-  const userStr = params.get('user');
-  if (!userStr) throw new Error('No user data');
-  return JSON.parse(decodeURIComponent(userStr));
-}
