@@ -8,6 +8,7 @@ let gameActive = false;
 let currentMultiplier = 1.00;
 let roundId = null;
 let myBet = null;
+let isAdmin = false;
 
 // Canvas setup
 const canvas = document.getElementById('gameCanvas');
@@ -23,7 +24,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Stars background (static)
+// Stars background
 function drawStars() {
     ctx.fillStyle = '#ffffff';
     for (let i = 0; i < 100; i++) {
@@ -43,33 +44,29 @@ let planeY = canvasHeight - 50;
 let wobble = 0;
 
 function drawPlane(multiplier) {
-    // Clear canvas
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     drawStars();
 
-    // Draw multiplier path curve
     ctx.beginPath();
     ctx.strokeStyle = '#ffaa00';
     ctx.lineWidth = 3;
     ctx.setLineDash([10, 5]);
     ctx.moveTo(0, canvasHeight);
     for (let x = 0; x <= canvasWidth; x += 10) {
-        let t = x / canvasWidth; // 0 to 1
-        let y = canvasHeight - (t * multiplier * 50); // climb based on multiplier
+        let t = x / canvasWidth;
+        let y = canvasHeight - (t * multiplier * 50);
         if (y < 0) y = 0;
         ctx.lineTo(x, y);
     }
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Draw plane with wobble
-    const planeAngle = Math.sin(Date.now() * 0.01) * 0.1; // slight rotation
-    wobble = Math.sin(Date.now() * 0.02) * 5; // side wobble
+    const planeAngle = Math.sin(Date.now() * 0.01) * 0.1;
+    wobble = Math.sin(Date.now() * 0.02) * 5;
 
     let targetY = canvasHeight - (multiplier - 1) * 80;
     if (targetY < 20) targetY = 20;
 
-    // Smooth plane movement
     planeY += (targetY - planeY) * 0.05;
     planeX = 80 + wobble;
 
@@ -96,7 +93,6 @@ function drawPlane(multiplier) {
     requestAnimationFrame(() => drawPlane(currentMultiplier));
 }
 
-// Start animation
 drawPlane(1.00);
 
 // Telegram auth
@@ -107,11 +103,72 @@ if (initData) {
     alert('Telegram initData not found');
 }
 
+// Admin panel functions
+async function checkAdminStatus() {
+    if (!user) return;
+    
+    try {
+        const response = await fetch('/api/admin/stats', {
+            headers: {
+                'x-telegram-init-data': initData
+            }
+        });
+        
+        if (response.ok) {
+            isAdmin = true;
+            document.getElementById('adminPanel').style.display = 'block';
+            fetchAdminStats();
+            startAdminAutoRefresh();
+        }
+    } catch (err) {
+        console.log('Not an admin');
+    }
+}
+
+let adminRefreshInterval;
+
+function startAdminAutoRefresh() {
+    if (adminRefreshInterval) clearInterval(adminRefreshInterval);
+    adminRefreshInterval = setInterval(fetchAdminStats, 30000);
+}
+
+async function fetchAdminStats() {
+    try {
+        const response = await fetch('/api/admin/stats', {
+            headers: {
+                'x-telegram-init-data': initData
+            }
+        });
+        
+        if (response.ok) {
+            const stats = await response.json();
+            
+            document.getElementById('totalBets').innerText = stats.totalBets.toLocaleString();
+            document.getElementById('totalWon').innerText = stats.totalWon.toLocaleString();
+            document.getElementById('profit').innerText = stats.profit.toLocaleString();
+            document.getElementById('todayProfit').innerText = stats.todayProfit.toLocaleString();
+            
+            const timeStr = new Date(stats.lastUpdated).toLocaleString('my-MM', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+                timeZone: 'Asia/Yangon'
+            });
+            document.getElementById('lastUpdate').innerText = timeStr;
+        }
+    } catch (err) {
+        console.error('Failed to fetch admin stats:', err);
+    }
+}
+
 // Socket event handlers
 socket.on('authenticated', (data) => {
     user = data;
     document.getElementById('balance').innerText = data.balance;
     document.getElementById('username').innerText = data.username;
+    
+    checkAdminStatus();
 });
 
 socket.on('game_state', (state) => {
@@ -130,7 +187,7 @@ socket.on('multiplier_update', (data) => {
 
 socket.on('game_crashed', (data) => {
     gameActive = false;
-    document.getElementById('multiplier').innerText = '💥 ' + data.crashPoint.toFixed(2) + 'x';
+    document.getElementById('multiplier').innerHTML = '💥 ' + data.crashPoint.toFixed(2) + 'x';
     document.getElementById('cashoutBtn').disabled = true;
     document.getElementById('placeBetBtn').disabled = false;
     myBet = null;
@@ -157,11 +214,11 @@ socket.on('cashed_out', (data) => {
     document.getElementById('cashoutBtn').disabled = true;
     document.getElementById('placeBetBtn').disabled = false;
     myBet = null;
-    alert(`ငွေထုတ်ပြီးပါပြီ! ${data.winAmount.toFixed(2)} MMK (${data.multiplier.toFixed(2)}x)`);
+    alert(`✅ ငွေထုတ်ပြီးပါပြီ! ${data.winAmount.toFixed(2)} MMK (${data.multiplier.toFixed(2)}x)`);
 });
 
 socket.on('error', (msg) => {
-    alert(msg);
+    alert('❌ ' + msg);
 });
 
 // UI Buttons
@@ -175,20 +232,30 @@ document.getElementById('cashoutBtn').addEventListener('click', () => {
     socket.emit('cash_out');
 });
 
-// Fetch admin stats (if user is admin, you may check by userId)
-// For demo, we'll fetch if userId matches admin list (optional)
-socket.on('authenticated', (data) => {
-    // Example: if user id is admin (hardcoded for demo)
-    if (user.userId === '123456789') { // replace with your admin user id
-        document.getElementById('adminPanel').style.display = 'block';
-        fetchAdminStats();
-    }
-});
+// Refresh function
+function refreshAdmin() {
+    fetchAdminStats();
+}
 
-async function fetchAdminStats() {
-    const res = await fetch('/api/admin/stats');
-    const stats = await res.json();
-    document.getElementById('totalBets').innerText = stats.totalBets;
-    document.getElementById('totalWon').innerText = stats.totalWon;
-    document.getElementById('profit').innerText = stats.profit;
+// Export data function
+async function exportData() {
+    try {
+        const response = await fetch('/api/admin/users', {
+            headers: {
+                'x-telegram-init-data': initData
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `admin-data-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+        }
+    } catch (err) {
+        alert('ဒေတာထုတ်ရာတွင်အဆင်မပြေပါ');
+    }
 }
