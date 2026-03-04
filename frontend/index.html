@@ -3,150 +3,486 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CRASH GAME • AVIATOR</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <title>CRASH PRO - ULTIMATE UI</title>
+    <!-- Socket.io Client SDK -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Main Script -->
+    <script src="script.js" defer></script>
+    <style>
+        :root {
+            --primary: #00f2ff;
+            --secondary: #7000ff;
+            --success: #00ff88;
+            --danger: #ff3366;
+            --bg-dark: #060912;
+            --card-bg: rgba(16, 20, 35, 0.95);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(112, 0, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 10% 10%, rgba(0, 242, 255, 0.05) 0%, transparent 30%);
+            color: white;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .app-shell {
+            width: 100%;
+            max-width: 480px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* --- HEADER SECTION --- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+        }
+
+        .user-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .user-badge {
+            background: linear-gradient(90deg, var(--secondary), transparent);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border-left: 3px solid var(--primary);
+            color: #fff;
+        }
+
+        .balance-display {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+        }
+
+        .nav-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-sm {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .action-sm.deposit { border-color: var(--success); color: var(--success); }
+        .action-sm.withdraw { border-color: #ff9900; color: #ff9900; }
+
+        /* --- MULTIPLIER SECTION --- */
+        .main-display {
+            background: var(--card-bg);
+            height: 200px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .multiplier-val {
+            font-size: 5.5rem;
+            font-weight: 900;
+            z-index: 1;
+            background: linear-gradient(to bottom, #fff, #999);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 20px rgba(0,242,255,0.5));
+            letter-spacing: -2px;
+        }
+
+        /* --- BETTING CONTROLS --- */
+        .control-panel {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .amount-input {
+            width: 100%;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 15px;
+            color: var(--primary);
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-align: center;
+            outline: none;
+        }
+
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .q-chip {
+            background: #1a1f2e;
+            padding: 12px 5px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            text-align: center;
+            cursor: pointer;
+            border: 1px solid transparent;
+            font-weight: bold;
+            color: #ccc;
+        }
+
+        .q-chip:hover { border-color: var(--primary); color: white; }
+
+        .main-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-play {
+            flex: 1;
+            padding: 20px;
+            border-radius: 15px;
+            border: none;
+            font-size: 1.5rem;
+            font-weight: 900;
+            cursor: pointer;
+            transition: transform 0.1s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .btn-start { background: var(--success); color: #003311; box-shadow: 0 4px 20px rgba(0,255,136,0.4); }
+        .btn-stop { background: var(--danger); color: #fff; box-shadow: 0 4px 20px rgba(255,51,102,0.4); }
+        .btn-play:active { transform: scale(0.95); }
+
+        /* --- HISTORY TABLE --- */
+        .history-card {
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 18px;
+            flex-grow: 1;
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #333;
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .history-list {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            font-size: 0.9rem;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-weight: 500;
+        }
+
+        .val-win { color: var(--success); font-weight: bold; }
+
+        /* --- MODAL --- */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-box {
+            background: #161b29;
+            width: 100%;
+            max-width: 360px;
+            border-radius: 28px;
+            padding: 30px;
+            border: 1px solid var(--primary);
+            text-align: center;
+            box-shadow: 0 0 30px rgba(0,242,255,0.2);
+        }
+
+        .m-input {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 15px;
+            background: #000;
+            border: 1px solid #444;
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+    </style>
 </head>
 <body>
-    <div class="cyber-wrapper">
-        <!-- Header Section -->
-        <div class="header glass-panel">
-            <div class="logo">
-                <span class="logo-text">CRASH</span>
-                <span class="logo-accent">.GAME</span>
+    <div class="app-shell">
+        <header class="header">
+            <div class="user-stats">
+                <div class="user-badge" id="username">TG_USERNAME</div>
+                <div class="balance-display"><span id="balance">1,000</span> <small style="font-size: 0.75rem; color: #666;">MMK</small></div>
             </div>
-            <div class="user-info">
-                <div class="balance-container">
-                    <span class="balance-label">လက်ကျန်</span>
-                    <span class="balance-value" id="balance">0</span>
-                    <span class="balance-currency">MMK</span>
-                </div>
-                <div class="avatar" id="username">Guest</div>
+            <div class="nav-btns">
+                <button class="action-sm deposit" onclick="showDepositModal()">ငွေသွင်း</button>
+                <button class="action-sm withdraw" onclick="showWithdrawModal()">ငွေထုတ်</button>
             </div>
-        </div>
+        </header>
 
-        <!-- Game Area -->
-        <div class="game-container">
-            <div class="game-canvas-wrapper">
-                <canvas id="gameCanvas"></canvas>
-                
-                <!-- Waiting Overlay -->
-                <div class="waiting-overlay" id="waitingOverlay">
-                    <div class="waiting-content">
-                        <div class="waiting-spinner"></div>
-                        <div class="waiting-text">နောက်အကျော့စတင်ရန် စက္ကန့်ပိုင်းအကြာ</div>
-                        <div class="countdown-bar">
-                            <div class="countdown-progress" id="countdownProgress"></div>
-                        </div>
-                    </div>
-                </div>
+        <section class="main-display">
+            <div class="multiplier-val" id="multiplier">00.0x</div>
+        </section>
 
-                <!-- Crash Effect -->
-                <div class="crash-effect" id="crashEffect"></div>
-
-                <!-- Multiplier Display -->
-                <div class="multiplier-container">
-                    <span class="multiplier-value" id="multiplier">1.00x</span>
-                    <span class="multiplier-label">လက်ရှိမြှောက်ဖော်ကိန်း</span>
-                </div>
-
-                <!-- History Strip -->
-                <div class="history-strip" id="historyStrip"></div>
-            </div>
-        </div>
-
-        <!-- Betting Panel -->
-        <div class="betting-panel glass-panel">
-            <div class="betting-header">
-                <span class="panel-title">လောင်းကြေးထည့်ရန်</span>
-                <div class="quick-amounts">
-                    <button class="quick-btn" data-amount="10">10</button>
-                    <button class="quick-btn" data-amount="50">50</button>
-                    <button class="quick-btn" data-amount="100">100</button>
-                    <button class="quick-btn" data-amount="500">500</button>
-                </div>
-            </div>
+        <section class="control-panel">
+            <input type="number" class="amount-input" value="1000" id="betAmount">
             
-            <div class="betting-input-group">
-                <input type="number" id="betAmount" class="bet-input" placeholder="ငွေပမာဏ" min="1" value="10">
-                <div class="bet-buttons">
-                    <button id="placeBetBtn" class="btn btn-bet">
-                        <span class="btn-text">လောင်းမည်</span>
-                        <span class="btn-icon">🎰</span>
-                    </button>
-                    <button id="cashoutBtn" class="btn btn-cashout" disabled>
-                        <span class="btn-text">ငွေထုတ်ရန်</span>
-                        <span class="btn-icon">💸</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Stats Panel -->
-        <div class="stats-panel glass-panel">
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <span class="stat-label">ဒီအကျော့လောင်းငွေ</span>
-                    <span class="stat-value" id="roundBets">0 MMK</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">ကစားသမား</span>
-                    <span class="stat-value" id="playersCount">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">နောက်ဆုံးပေါက်ကွဲမှု</span>
-                    <span class="stat-value" id="lastCrash">1.00x</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Admin Panel (Hidden by default) -->
-        <div class="admin-panel glass-panel" id="adminPanel" style="display: none;">
-            <div class="admin-header">
-                <h3>👑 ADMIN DASHBOARD</h3>
-                <span class="admin-badge">CYBER CONTROL</span>
-            </div>
-            
-            <div class="admin-stats-grid">
-                <div class="admin-stat-card">
-                    <span class="admin-stat-label">စုစုပေါင်းလောင်းငွေ</span>
-                    <span class="admin-stat-value" id="totalBets">0</span>
-                    <span class="admin-stat-currency">MMK</span>
-                </div>
-                <div class="admin-stat-card">
-                    <span class="admin-stat-label">စုစုပေါင်းအနိုင်ငွေ</span>
-                    <span class="admin-stat-value" id="totalWon">0</span>
-                    <span class="admin-stat-currency">MMK</span>
-                </div>
-                <div class="admin-stat-card profit">
-                    <span class="admin-stat-label">အသားတင်အမြတ်</span>
-                    <span class="admin-stat-value" id="profit">0</span>
-                    <span class="admin-stat-currency">MMK</span>
-                </div>
+            <div class="quick-grid">
+                <div class="q-chip" onclick="setBet(500)">500</div>
+                <div class="q-chip" onclick="setBet(1000)">1,000</div>
+                <div class="q-chip" onclick="setBet(5000)">5,000</div>
+                <div class="q-chip" onclick="setBet(10000)">10,000</div>
             </div>
 
-            <div class="admin-section">
-                <div class="admin-section-header">
-                    <span>👥 ကစားသမားများ</span>
-                    <button class="admin-refresh-btn" onclick="refreshUsers()">🔄</button>
+            <div class="main-actions">
+                <button class="btn-play btn-start" id="startBtn">START</button>
+                <button class="btn-play btn-stop" id="stopBtn" style="display:none">STOP</button>
+            </div>
+        </section>
+
+        <section class="history-card">
+            <div class="table-header">
+                <span>Username</span>
+                <span>Start</span>
+                <span>Stop</span>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="history-item">
+                    <span>Player_01</span>
+                    <span>1.00x</span>
+                    <span class="val-win">1.50x</span>
                 </div>
-                <div class="users-list" id="usersList">
-                    <!-- Users will be loaded here -->
+                <div class="history-item">
+                    <span>Gamer_X</span>
+                    <span>1.00x</span>
+                    <span style="color:#666">Wait..</span>
                 </div>
             </div>
-
-            <div class="admin-actions">
-                <button class="admin-action-btn" onclick="exportData()">📥 ဒေတာထုတ်ရန်</button>
-                <button class="admin-action-btn" onclick="refreshAdmin()">🔄 ပြန်စစ်ရန်</button>
-            </div>
-        </div>
-
-        <!-- Toast Notifications -->
-        <div class="toast-container" id="toastContainer"></div>
+        </section>
     </div>
 
-    <script src="script.js"></script>
+    <!-- Hidden modals (kept for compatibility) -->
+    <div class="modal" id="depModal" style="display:none;"></div>
+    <div class="modal" id="witModal" style="display:none;"></div>
+
+    <!-- Telegram Web App Integration Script -->
+    <script>
+        // ============================================
+        // TELEGRAM WEB APP INTEGRATION
+        // ============================================
+        
+        // Initialize Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Expand to full height
+        tg.ready(); // Tell Telegram that app is ready
+        
+        // Backend URL (Render)
+        const BACKEND_URL = 'https://crashgame-money2.onrender.com';
+        
+        // Get user data from Telegram
+        const user = tg.initDataUnsafe?.user;
+        
+        if (user) {
+            console.log('Telegram User:', user);
+            
+            // Update username display
+            const usernameDisplay = user.username || `${user.first_name} ${user.last_name || ''}`.trim();
+            document.getElementById('username').textContent = usernameDisplay;
+            
+            // Send user data to backend for authentication
+            fetch(`${BACKEND_URL}/api/auth`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: user.id,
+                    username: usernameDisplay,
+                    first_name: user.first_name,
+                    last_name: user.last_name
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Update balance
+                    document.getElementById('balance').textContent = data.user.balance.toLocaleString();
+                    
+                    // Store user data for later use
+                    window.telegramUser = data.user;
+                    window.telegramId = user.id;
+                    
+                    // Update socket connection with user ID if socket exists
+                    if (window.socket) {
+                        window.socket.userId = user.id;
+                    }
+                    
+                    console.log('Auth successful:', data.user);
+                }
+            })
+            .catch(err => console.error('Auth error:', err));
+        }
+        
+        // ============================================
+        // DEPOSIT FUNCTION
+        // ============================================
+        window.showDepositModal = function() {
+            const amount = prompt('ငွေသွင်းမည့်ပမာဏ ထည့်ပါ (MMK):', '1000');
+            if (amount && !isNaN(amount) && parseInt(amount) > 0) {
+                // Send deposit request to bot via Telegram
+                tg.sendData(JSON.stringify({
+                    type: 'deposit',
+                    amount: parseInt(amount),
+                    paymentMethod: 'KPay',
+                    screenshotUrl: 'manual_confirmation' // In real app, you'd upload screenshot
+                }));
+                
+                tg.showAlert(`✅ ငွေသွင်းရန် တောင်းဆိုချက် (${amount} MMK) ကို ပို့လိုက်ပါပြီ။\n\nAdmin အတည်ပြုပြီးပါက ငွေလက်ကျန်ထဲသို့ ထည့်ပေးပါမည်။`);
+            } else {
+                tg.showAlert('❌ ပမာဏ အမှန်အကန်ထည့်ပါ။');
+            }
+        };
+        
+        // ============================================
+        // WITHDRAW FUNCTION
+        // ============================================
+        window.showWithdrawModal = function() {
+            const amount = prompt('ငွေထုတ်မည့်ပမာဏ ထည့်ပါ (MMK):', '1000');
+            if (!amount || isNaN(amount) || parseInt(amount) <= 0) {
+                tg.showAlert('❌ ပမာဏ အမှန်အကန်ထည့်ပါ။');
+                return;
+            }
+            
+            const phone = prompt('KPay ဖုန်းနံပါတ် ထည့်ပါ:', '');
+            if (!phone) {
+                tg.showAlert('❌ ဖုန်းနံပါတ် ထည့်ပါ။');
+                return;
+            }
+            
+            const name = prompt('KPay အကောင့်နာမည် ထည့်ပါ:', '');
+            if (!name) {
+                tg.showAlert('❌ အကောင့်နာမည် ထည့်ပါ။');
+                return;
+            }
+            
+            // Check balance
+            const currentBalance = parseInt(document.getElementById('balance').textContent.replace(/,/g, ''));
+            if (parseInt(amount) > currentBalance) {
+                tg.showAlert('❌ လက်ကျန်ငွေ မလုံလောက်ပါ။');
+                return;
+            }
+            
+            // Send withdraw request to bot
+            tg.sendData(JSON.stringify({
+                type: 'withdraw',
+                amount: parseInt(amount),
+                accountNumber: phone,
+                accountName: name
+            }));
+            
+            tg.showAlert(`✅ ငွေထုတ်ရန် တောင်းဆိုချက် (${amount} MMK) ကို ပို့လိုက်ပါပြီ။\n\nAdmin ငွေလွှဲပြီးပါက အတည်ပြုပေးပါမည်။`);
+        };
+        
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+        window.setBet = function(val) {
+            document.getElementById('betAmount').value = val;
+        };
+        
+        // Close app function
+        window.closeApp = function() {
+            tg.close();
+        };
+        
+        // Override old modal functions (for compatibility)
+        window.showModal = function(id) {
+            if (id === 'depModal') {
+                window.showDepositModal();
+            } else if (id === 'witModal') {
+                window.showWithdrawModal();
+            }
+        };
+        
+        window.hideModal = function(id) {
+            // Not needed with Telegram native UI
+            console.log('Modal hidden:', id);
+        };
+        
+        // ============================================
+        // MAIN COLOR SCHEME
+        // ============================================
+        tg.setHeaderColor('#060912');
+        tg.setBackgroundColor('#060912');
+        
+        console.log('✅ Telegram Web App initialized');
+    </script>
 </body>
 </html>
